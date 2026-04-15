@@ -1,0 +1,151 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuroSync Digital Twin — Parkinson's Monitor</title>
+    <meta name="description" content="Real-time Parkinson's disease digital twin simulation with physiological telemetry and 3D gait analysis.">
+    <link rel="stylesheet" href="styles.css?v=4">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+<div class="glow-bg"></div>
+
+<div class="app-shell">
+
+    <!-- ───── TOP BAR ───── -->
+    <header class="topbar">
+        <div>
+            <div class="logo">NeuroSync // Digital Twin</div>
+            <div class="logo-sub">Parkinson's Motor &amp; Vitals Monitor v4.0</div>
+        </div>
+
+        <div class="topbar-sep"></div>
+
+        <div class="live-pill">
+            <div class="live-dot"></div>
+            Live
+        </div>
+
+        <div class="topbar-sep"></div>
+
+        <!-- Scenario Selector -->
+        <div class="scenario-group">
+            <label>Mode</label>
+            <button class="sc-btn active" id="btn-resting"  onclick="setScenario('resting')">Resting</button>
+            <button class="sc-btn"        id="btn-running"  onclick="setScenario('running')">Running</button>
+            <button class="sc-btn"        id="btn-stressed" onclick="setScenario('stressed')">Stressed</button>
+            <button class="sc-btn"        id="btn-sleeping" onclick="setScenario('sleeping')">Sleeping</button>
+        </div>
+
+        <!-- State Alerts -->
+        <div id="freeze-badge"  class="alert-badge">⬛ Gait Freeze</div>
+        <div id="festin-badge"  class="alert-badge">⚡ Festinating</div>
+
+        <!-- Session clock -->
+        <div class="session-info">
+            SESSION <span id="session-timestamp">00:00:00</span>
+        </div>
+    </header>
+
+    <!-- ───── MAIN AREA ───── -->
+    <div class="main-content">
+
+        <!-- LEFT — 3D Simulation Viewport -->
+        <div class="viewport-panel">
+            <div id="three-viewport" style="flex:1; position:relative;">
+                <!-- Loading overlay -->
+                <div id="diag-overlay" class="diagnostic-overlay">
+                    <div class="spinner"></div>
+                    <div id="diag-status">Initializing Core Systems...</div>
+                    <div id="diag-error" class="err-msg"></div>
+                </div>
+
+                <!-- Top-left label -->
+                <div class="vp-label">
+                    <div class="live-dot" style="width:5px;height:5px;"></div>
+                    <span class="vp-label-text">Spatial Navigation Layer</span>
+                </div>
+            </div>
+
+            <!-- AI insight strip at bottom of viewport -->
+            <div class="ai-strip">
+                <span class="ai-strip-label">AI ›</span>
+                <span class="ai-strip-text" id="ai-insight-text">Calibrating neurological stream...</span>
+            </div>
+        </div>
+
+        <!-- RIGHT — Stats Panel -->
+        <div class="stats-panel">
+
+            <!-- ── Vitals ── -->
+            <div class="section-head">Physiological Telemetry</div>
+            <div class="vitals-grid">
+
+                <div class="vital-tile" id="tile-hr">
+                    <div class="vital-label">Heart Rate</div>
+                    <div class="vital-value" id="val-hr">--</div>
+                    <div class="vital-unit">BPM</div>
+                    <div class="vital-bar-track"><div class="vital-bar-fill" id="bar-hr" style="width:0%"></div></div>
+                </div>
+
+                <div class="vital-tile" id="tile-stress">
+                    <div class="vital-label">Stress Load</div>
+                    <div class="vital-value" id="val-stress">--</div>
+                    <div class="vital-unit">% INTENSITY</div>
+                    <div class="vital-bar-track"><div class="vital-bar-fill" id="bar-stress" style="width:0%"></div></div>
+                </div>
+
+                <div class="vital-tile" id="tile-fall">
+                    <div class="vital-label">Fall Risk</div>
+                    <div class="vital-value" id="val-fall">--</div>
+                    <div class="vital-unit">% PROBABILITY</div>
+                    <div class="vital-bar-track"><div class="vital-bar-fill" id="bar-fall" style="width:0%"></div></div>
+                </div>
+
+                <div class="vital-tile" id="tile-tremor">
+                    <div class="vital-label">Tremor Index</div>
+                    <div class="vital-value" id="val-tremor">--</div>
+                    <div class="vital-unit">INTENSITY</div>
+                    <div class="vital-bar-track"><div class="vital-bar-fill" id="bar-tremor" style="width:0%"></div></div>
+                </div>
+
+                <div class="vital-tile" id="tile-health">
+                    <div class="vital-label">Health Index</div>
+                    <div class="vital-value" id="val-health">--</div>
+                    <div class="vital-unit"><span id="health-status">SYNCING</span></div>
+                    <div class="vital-bar-track"><div class="vital-bar-fill" id="bar-health" style="width:0%"></div></div>
+                </div>
+
+                <div class="vital-tile" id="tile-activity">
+                    <div class="vital-label">Activity</div>
+                    <div class="vital-value" id="val-activity">--</div>
+                    <div class="vital-unit">MOTOR SCORE</div>
+                    <div class="vital-bar-track"><div class="vital-bar-fill" id="bar-activity" style="width:0%"></div></div>
+                </div>
+
+            </div>
+
+            <!-- ── AI Diagnosis ── -->
+            <div class="section-head">Clinical AI Observation</div>
+            <div class="ai-block">
+                <div class="ai-status-badge" id="ai-status-badge">● NOMINAL</div>
+                <div class="ai-diag-text" id="ai-status-long">Waiting for physiological pattern match...</div>
+            </div>
+
+            <!-- ── HR Chart ── -->
+            <div class="section-head">Heart Rate Trend</div>
+            <div class="chart-block">
+                <canvas id="vitalsChart"></canvas>
+            </div>
+
+        </div><!-- /stats-panel -->
+    </div><!-- /main-content -->
+</div><!-- /app-shell -->
+
+<script src="app.js?v=4"></script>
+</body>
+</html>

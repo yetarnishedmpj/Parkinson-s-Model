@@ -1,0 +1,282 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Orbitron:wght@500;700&display=swap');
+
+/* ─── Design Tokens ─── */
+:root {
+    --cyan:   #00e5ff;
+    --green:  #00e676;
+    --amber:  #ffab00;
+    --red:    #ff1744;
+    --t1: #eef2ff;
+    --t2: #7a8fbb;
+    --t3: #3a4a6a;
+    --bg:       #060810;
+    --bg-panel: #0a0d18;
+    --border:   rgba(255,255,255,0.07);
+    --borderA:  rgba(0,229,255,0.22);
+    --cyan-glow: 0 0 18px rgba(0,229,255,0.4);
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; background:var(--bg); color:var(--t1); font-family:'Inter',sans-serif; overflow:hidden; }
+
+.glow-bg {
+    position:fixed; inset:0; z-index:-1;
+    background:
+        radial-gradient(ellipse 55% 45% at 20% 65%, rgba(0,229,255,0.055) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 35% at 85% 20%, rgba(213,0,249,0.04) 0%, transparent 60%);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LAYOUT — fully position-based so height never needs to inherit
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Top bar: anchored to viewport top */
+.topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 52px;
+    z-index: 100;
+    display: flex; align-items: center;
+    padding: 0 1.2rem; gap: 1rem;
+    background: rgba(6,8,16,0.97);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(14px);
+    overflow: hidden;
+}
+
+/* Main content: fills everything below topbar */
+.main-content {
+    position: fixed;
+    top: 52px; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: row;
+}
+
+/* Left panel: 3-D viewport */
+.viewport-panel {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: #000;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+}
+
+/* Three.js gets injected here — let it fill the parent naturally */
+#three-viewport {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+}
+/* DO NOT set width/height on the canvas — Three.js owns that */
+
+/* Viewport top label */
+.vp-label {
+    position: absolute; top: 12px; left: 12px; z-index: 10;
+    display: flex; align-items: center; gap: 7px;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid var(--borderA);
+    border-radius: 3px; padding: 5px 11px;
+    backdrop-filter: blur(8px);
+}
+.vp-label-text {
+    font-size: 0.58rem; font-weight: 600;
+    letter-spacing: 2px; text-transform: uppercase; color: var(--cyan);
+}
+
+/* AI strip at bottom of viewport */
+.ai-strip {
+    flex-shrink: 0;
+    height: 40px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 14px;
+    background: rgba(6,8,16,0.95);
+    border-top: 1px solid var(--borderA);
+    overflow: hidden;
+}
+.ai-strip-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.55rem; font-weight: 600; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--cyan); opacity: .65; white-space: nowrap;
+}
+.ai-strip-text {
+    font-size: 0.74rem; font-style: italic; color: var(--t1);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex:1;
+}
+
+/* Diagnostic overlay */
+.diagnostic-overlay {
+    position: absolute; inset: 0; z-index: 100;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(6,8,16,.97); color: var(--cyan);
+    transition: opacity .4s, visibility .4s;
+}
+.diagnostic-overlay.hidden { opacity:0; visibility:hidden; pointer-events:none; }
+.spinner {
+    width:34px; height:34px;
+    border:2px solid rgba(0,229,255,.1); border-top:2px solid var(--cyan);
+    border-radius:50%; animation:spin .85s linear infinite; margin-bottom:10px;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+#diag-status { font-size:.72rem; letter-spacing:.8px; color:var(--t2); }
+.err-msg { color:var(--red); font-size:.68rem; margin-top:5px; text-align:center; max-width:80%; }
+
+/* Right panel: stats dashboard */
+.stats-panel {
+    width: 316px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-panel);
+    overflow-y: auto;
+}
+.stats-panel::-webkit-scrollbar { width:3px; }
+.stats-panel::-webkit-scrollbar-thumb { background:var(--borderA); border-radius:2px; }
+
+/* ── Section headers ── */
+.section-head {
+    flex-shrink: 0;
+    padding: 8px 12px 5px;
+    display: flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.55rem; letter-spacing: 2.5px;
+    text-transform: uppercase; color: var(--t3);
+    border-bottom: 1px solid var(--border);
+}
+.section-head::before {
+    content:''; width:2px; height:9px;
+    background:var(--cyan); border-radius:2px; opacity:.5;
+}
+
+/* ── Vital tiles grid (2 columns) ── */
+.vitals-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.vital-tile {
+    background: var(--bg-panel);
+    padding: 10px 12px 8px;
+    border-top: 2px solid transparent;
+    transition: background .2s, border-color .4s;
+}
+.vital-tile:hover { background: rgba(18,26,50,.9); }
+.vital-label {
+    font-size: 0.53rem; font-weight: 600;
+    letter-spacing: 1.5px; text-transform: uppercase; color: var(--t3); margin-bottom: 2px;
+}
+.vital-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.5rem; font-weight: 500; line-height: 1;
+    color: var(--t1); transition: color .4s;
+}
+.vital-unit {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.5rem; color: var(--t3); letter-spacing: 1px; margin-top: 2px;
+}
+.vital-bar-track {
+    margin-top: 5px; height: 2px;
+    background: var(--border); border-radius: 1px; overflow: hidden;
+}
+.vital-bar-fill {
+    height: 100%; border-radius: 1px;
+    background: var(--cyan); transition: width .35s ease, background .4s;
+}
+/* States */
+.vital-tile.state-ok   { border-top-color: var(--green); }
+.vital-tile.state-warn { border-top-color: var(--amber); }
+.vital-tile.state-crit { border-top-color: var(--red); }
+.vital-tile.state-ok   .vital-value { color: var(--green); }
+.vital-tile.state-warn .vital-value { color: var(--amber); }
+.vital-tile.state-crit .vital-value { color: var(--red); }
+.vital-tile.state-ok   .vital-bar-fill { background: var(--green); }
+.vital-tile.state-warn .vital-bar-fill { background: var(--amber); }
+.vital-tile.state-crit .vital-bar-fill { background: var(--red); }
+
+/* ── AI Block ── */
+.ai-block { padding:10px 12px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.ai-status-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 10px; margin-bottom: 5px;
+    font-size: 0.57rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+    background: rgba(0,229,255,0.1); color: var(--cyan);
+    border: 1px solid var(--borderA); transition: all .3s;
+}
+.ai-diag-text { font-size:.71rem; line-height:1.5; color:var(--t2); font-style:italic; }
+
+/* ── Chart ── */
+.chart-block {
+    flex: 1; min-height: 0;
+    padding: 8px 12px 10px;
+    display: flex; flex-direction: column;
+}
+.chart-block canvas { flex:1; min-height:80px; width:100%; }
+
+/* ── Topbar elements ── */
+.logo {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.8rem; font-weight: 700; letter-spacing: 3px;
+    text-transform: uppercase; white-space: nowrap; line-height: 1.1;
+    background: linear-gradient(90deg, #fff 20%, var(--cyan));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.logo-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.55rem; color: var(--t3); letter-spacing: 1.5px;
+    -webkit-text-fill-color: var(--t3);
+}
+.topbar-sep { width:1px; height:22px; background:var(--border); flex-shrink:0; }
+
+.live-pill {
+    display:flex; align-items:center; gap:5px; white-space:nowrap;
+    background:rgba(0,230,118,.1); border:1px solid rgba(0,230,118,.3);
+    border-radius:20px; padding:2px 9px 2px 7px;
+    font-size:.6rem; font-weight:700; letter-spacing:1.5px;
+    text-transform:uppercase; color:var(--green);
+}
+.live-dot {
+    width:6px; height:6px; background:var(--green); border-radius:50%;
+    box-shadow:0 0 7px var(--green); animation:livePulse 1.4s infinite;
+}
+@keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+
+.scenario-group { display:flex; gap:3px; align-items:center; }
+.scenario-group > span { font-size:.57rem; color:var(--t3); text-transform:uppercase; letter-spacing:1.5px; margin-right:4px; }
+
+.sc-btn {
+    background:transparent; border:1px solid var(--border);
+    color:var(--t2); padding:3px 10px; border-radius:3px;
+    cursor:pointer; font-family:'Inter',sans-serif;
+    font-size:.64rem; font-weight:500; transition:all .18s; white-space:nowrap;
+}
+.sc-btn:hover { border-color:var(--cyan); color:var(--cyan); background:rgba(0,229,255,.1); }
+.sc-btn.active {
+    background:var(--cyan); color:#060810;
+    border-color:var(--cyan); font-weight:700; box-shadow:var(--cyan-glow);
+}
+
+.alert-badge {
+    display:none; align-items:center; gap:5px;
+    padding:2px 9px; border-radius:20px;
+    font-size:.58rem; font-weight:700; letter-spacing:1.5px;
+    text-transform:uppercase; white-space:nowrap;
+}
+.alert-badge.freeze { display:flex; background:rgba(255,23,68,.18); border:1px solid rgba(255,23,68,.4); color:var(--red); }
+.alert-badge.festin { display:flex; background:rgba(255,171,0,.18); border:1px solid rgba(255,171,0,.4); color:var(--amber); }
+
+.session-info {
+    margin-left:auto; font-family:'JetBrains Mono',monospace;
+    font-size:.65rem; color:var(--t3); white-space:nowrap;
+}
+.session-info span { color:var(--t2); }
+
+/* Misc */
+.status-excellent { color:var(--green); }
+.status-critical  { color:var(--red); }
+.status-stable    { color:var(--cyan); }

@@ -1,0 +1,15 @@
+# Environments
+.venv/
+venv-20260415T131659Z-3-001/
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# C# / .NET
+backend_cs/bin/
+backend_cs/obj/
+
+# OS files
+.DS_Store
