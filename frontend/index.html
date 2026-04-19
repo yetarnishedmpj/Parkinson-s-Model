@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuroSync Digital Twin — Parkinson's Monitor</title>
+    <meta name="description" content="Real-time Parkinson's disease digital twin simulation with physiological telemetry, LSTM diagnostics and 3D gait analysis.">
+    <link rel="stylesheet" href="styles.css?v=5">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+<div class="glow-bg"></div>
+
+<div class="app-shell">
+
+    <!-- ───── TOP BAR ───── -->
+    <header class="topbar">
+        <div>
+            <div class="logo">NeuroSync // Digital Twin</div>
+            <div class="logo-sub">Parkinson's Motor &amp; Vitals Monitor v5.0</div>
+        </div>
+
+        <div class="topbar-sep"></div>
+
+        <div class="live-pill">
+            <div class="live-dot"></div>
+            Live
+        </div>
+
+        <div class="topbar-sep"></div>
+
+        <!-- Scenario Selector -->
+        <div class="scenario-group">
+            <label>Mode</label>
+            <button class="sc-btn active" id="btn-resting"  onclick="setScenario('resting')">Resting</button>
+            <button class="sc-btn"        id="btn-running"  onclick="setScenario('running')">Running</button>
+            <button class="sc-btn"        id="btn-stressed" onclick="setScenario('stressed')">Stressed</button>
+            <button class="sc-btn"        id="btn-sleeping" onclick="setScenario('sleeping')">Sleeping</button>
+        </div>
+
+        <div class="topbar-sep"></div>
+
+        <!-- Heatmap + Replay toggles -->
+        <button class="sc-btn" id="btn-heatmap" onclick="toggleHeatmap()">Heatmap OFF</button>
+        <button class="sc-btn" id="btn-replay"  onclick="toggleReplayPanel()">Sessions</button>
+
+        <div class="topbar-sep"></div>
+
+        <!-- State Alerts -->
+        <div id="freeze-badge"  class="alert-badge">&#9634; Gait Freeze</div>
+        <div id="festin-badge"  class="alert-badge">&#9889; Festinating</div>
+
+        <!-- Session clock -->
+        <div class="session-info">
+            SESSION <span id="session-timestamp">00:00:00</span>
+        </div>
+    </header>
+
+    <!-- ───── MAIN AREA ───── -->
+    <div class="main-content">
+
+        <!-- LEFT — 3D Simulation Viewport -->
+        <div class="viewport-panel">
+            <div id="three-viewport" style="flex:1; position:relative;">
+                <!-- Loading overlay -->
+                <div id="diag-overlay" class="diagnostic-overlay">
+                    <div class="spinner"></div>
+                    <div id="diag-status">Initializing Core Systems...</div>
+                    <div id="diag-error" class="err-msg"></div>
+                </div>
+
+                <!-- Top-left label -->
+                <div class="vp-label">
+                    <div class="live-dot" style="width:5px;height:5px;"></div>
+                    <span class="vp-label-text" id="vp-label-text">Spatial Navigation Layer</span>
+                </div>
+
+                <!-- Goal indicator -->
+                <div class="goal-indicator" id="goal-indicator">
+                    <span class="goal-label">NAVIGATING TO</span>
+                    <span class="goal-name" id="goal-name">—</span>
+                </div>
+
+                <!-- LSTM indicator -->
+                <div class="lstm-pill" id="lstm-pill">LSTM</div>
+
+                <!-- Session Replay Panel (hidden by default) -->
+                <div class="replay-panel hidden" id="replay-panel">
+                    <div class="section-head" style="border-bottom:none;padding-bottom:8px;">Past Sessions</div>
+                    <div id="session-list" style="overflow-y:auto;max-height:240px;font-size:.65rem;color:#7a8fbb;">
+                        Loading…
+                    </div>
+                    <button class="sc-btn" style="margin-top:8px;width:100%" onclick="stopReplay()">Stop Replay</button>
+                </div>
+
+                <!-- WASD Control HUD -->
+                <div id="wasd-hud" style="position:absolute;bottom:12px;left:12px;display:grid;grid-template-columns:repeat(3,28px);grid-template-rows:repeat(2,28px);gap:3px;opacity:0.75;pointer-events:none;">
+                    <div></div>
+                    <div id="k-w"  style="display:flex;align-items:center;justify-content:center;background:#0d1b2e;border:1px solid #1e3a5f;border-radius:5px;color:#4a7fa0;font-size:.65rem;font-weight:700;transition:all .1s;">W</div>
+                    <div></div>
+                    <div id="k-a"  style="display:flex;align-items:center;justify-content:center;background:#0d1b2e;border:1px solid #1e3a5f;border-radius:5px;color:#4a7fa0;font-size:.65rem;font-weight:700;transition:all .1s;">A</div>
+                    <div id="k-s"  style="display:flex;align-items:center;justify-content:center;background:#0d1b2e;border:1px solid #1e3a5f;border-radius:5px;color:#4a7fa0;font-size:.65rem;font-weight:700;transition:all .1s;">S</div>
+                    <div id="k-d"  style="display:flex;align-items:center;justify-content:center;background:#0d1b2e;border:1px solid #1e3a5f;border-radius:5px;color:#4a7fa0;font-size:.65rem;font-weight:700;transition:all .1s;">D</div>
+                </div>
+            </div>
+
+            <!-- AI insight strip at bottom of viewport -->
+            <div class="ai-strip">
+                <span class="ai-strip-label">AI ›</span>
+                <span class="ai-strip-text" id="ai-insight-text">Calibrating neurological stream...</span>
+            </div>
+        </div>
+
+        <!-- RIGHT — Stats Panel -->
+        <div class="stats-panel">
+
+            <!-- ── Vitals ── -->
+            <div class="section-head">Physiological Telemetry</div>
+            <div class="vitals-grid">
+
+                <div class="vital-tile" id="tile-hr">
+                    <div class="vital-label">Heart Rate</div>
+                    <div class="vital-value" id="val-hr">--</div>
+                    <div class="vital-unit">BPM</div>
+                    <div class="vital-bar-track"><div class="vital-bar-fill" id="bar-hr" style="width:0%"></div></div>
+                </div>
+
+                <div class="vital-tile" id="tile-stress">
+                    <div class="vital-label">Stress Load</div>
+                    <div class="vital-value" id="val-stress">--</div>
+                    <div class="vital-unit">% INTENSITY</div>
+                    <div class="vital-bar-track"><div class="vital-bar-fill" id="bar-stress" style="width:0%"></div></div>
+                </div>
+
+                <div class="vital-tile" id="tile-fall">
+                    <div class="vital-label">Fall Risk</div>
+                    <div class="vital-value" id="val-fall">--</div>
+                    <div class="vital-unit">% PROBABILITY</div>
+                    <div class="vital-bar-track"><div class="vital-bar-fill" id="bar-fall" style="width:0%"></div></div>
+                </div>
+
+                <div class="vital-tile" id="tile-tremor">
+                    <div class="vital-label">Tremor Index</div>
+                    <div class="vital-value" id="val-tremor">--</div>
+                    <div class="vital-unit">INTENSITY</div>
+                    <div class="vital-bar-track"><div class="vital-bar-fill" id="bar-tremor" style="width:0%"></div></div>
+                </div>
+
+                <div class="vital-tile" id="tile-health">
+                    <div class="vital-label">Health Index</div>
+                    <div class="vital-value" id="val-health">--</div>
+                    <div class="vital-unit"><span id="health-status">SYNCING</span></div>
+                    <div class="vital-bar-track"><div class="vital-bar-fill" id="bar-health" style="width:0%"></div></div>
+                </div>
+
+                <div class="vital-tile" id="tile-fatigue">
+                    <div class="vital-label">Fatigue</div>
+                    <div class="vital-value" id="val-fatigue">--</div>
+                    <div class="vital-unit">MOTOR ENDURANCE</div>
+                    <div class="vital-bar-track"><div class="vital-bar-fill" id="bar-fatigue" style="width:0%"></div></div>
+                </div>
+
+            </div>
+
+            <!-- ── AI Diagnosis ── -->
+            <div class="section-head">Clinical AI Observation</div>
+            <div class="ai-block">
+                <div class="ai-status-badge" id="ai-status-badge">● NOMINAL</div>
+                <div id="freeze-prob-bar" style="margin:4px 0 6px;height:3px;background:#1e293b;border-radius:2px;">
+                    <div id="freeze-prob-fill" style="height:100%;width:0%;background:#ff1744;border-radius:2px;transition:width .4s"></div>
+                </div>
+                <div style="font-size:.52rem;color:#3a4a6a;letter-spacing:1px;margin-bottom:5px;">FOG RISK (NEXT 3s)</div>
+                <div class="ai-diag-text" id="ai-status-long">Waiting for physiological pattern match...</div>
+            </div>
+
+            <!-- ── HR Chart ── -->
+            <div class="section-head">Heart Rate Trend</div>
+            <div class="chart-block">
+                <canvas id="vitalsChart"></canvas>
+            </div>
+
+        </div><!-- /stats-panel -->
+    </div><!-- /main-content -->
+</div><!-- /app-shell -->
+
+<script src="app_fixed.js"></script>
+</body>
+</html>
