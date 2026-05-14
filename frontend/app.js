@@ -9,7 +9,7 @@ const API_BASE = `${window.location.protocol}//${HOST}/api/v1`;
 
 // --- Global State ---
 let ws;
-let scene, camera, renderer, avatar, chart, controls;
+let scene, camera, renderer, composer, avatar, chart, controls;
 let threeContainer, ctx;
 
 // Mall Architecture
@@ -30,6 +30,15 @@ let swayFactor      = 0;
 let isFestinating   = false;
 let isFreezing      = false;
 let impactShake     = 0;
+let pathLine, avatarAura;
+let heatmapCanvas, heatmapCtx, heatmapTexture, floorMesh;
+let heatmapVisible = false;
+let interventionMeshes = [];
+let replayPanelOpen = false;
+let replayTimer = null;
+let replayTicks = [];
+let replayIndex = 0;
+window.currentFreezeRisk = 0;
 
 const keys = { w: false, a: false, s: false, d: false };
 
@@ -82,38 +91,53 @@ function init() {
 
 function createAvatarEntity(colorHex, isMain = false) {
     const group = new THREE.Group();
-    const mat = new THREE.MeshPhongMaterial({ color: colorHex, emissive: colorHex, emissiveIntensity: 0.5, shininess: 100 });
+    const coreMat = new THREE.MeshPhongMaterial({ color: colorHex, emissive: colorHex, emissiveIntensity: 0.8, shininess: 100, transparent: true, opacity: 0.9 });
+    const limbMat = new THREE.MeshPhongMaterial({ color: 0x1e293b, emissive: 0x0f172a, emissiveIntensity: 0.2, shininess: 50, transparent: true, opacity: 0.7 });
+    const jointMat = new THREE.MeshPhongMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.4 });
     
-    const _torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.4, 4, 16), mat);
-    _torso.position.y = 1.0;
+    const _torso = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.6, 16), coreMat);
+    _torso.position.y = 1.1;
     group.add(_torso);
     
-    const _head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), mat);
-    _head.position.y = 1.35;
+    const _head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 16), limbMat);
+    _head.position.y = 1.55;
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.08, 0.2), coreMat);
+    visor.position.set(0, 0, 0.08);
+    _head.add(visor);
     group.add(_head);
     
-    const limbGeo = new THREE.CapsuleGeometry(0.06, 0.4, 4, 8);
-    const _armL = new THREE.Mesh(limbGeo, mat);
-    _armL.position.set(-0.25, 1.1, 0);
-    group.add(_armL);
-    
-    const _armR = new THREE.Mesh(limbGeo, mat);
-    _armR.position.set(0.25, 1.1, 0);
-    group.add(_armR);
+    const createLimb = (x, y, z) => {
+        const limb = new THREE.Group();
+        limb.position.set(x, y, z);
+        const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.4, 4, 8), limbMat);
+        mesh.position.y = -0.2;
+        limb.add(mesh);
+        const joint = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), jointMat);
+        limb.add(joint);
+        return limb;
+    };
 
-    const _legL = new THREE.Mesh(limbGeo, mat);
-    _legL.position.set(-0.12, 0.6, 0);
-    group.add(_legL);
-
-    const _legR = new THREE.Mesh(limbGeo, mat);
-    _legR.position.set(0.12, 0.6, 0);
-    group.add(_legR);
+    const _armL = createLimb(-0.35, 1.3, 0); group.add(_armL);
+    const _armR = createLimb(0.35, 1.3, 0);  group.add(_armR);
+    const _legL = createLimb(-0.15, 0.7, 0); group.add(_legL);
+    const _legR = createLimb(0.15, 0.7, 0);  group.add(_legR);
 
     if (isMain) {
         torso = _torso; head = _head; armL = _armL; armR = _armR; legL = _legL; legR = _legR;
     }
-    
     return group;
+}
+
+function createAuraTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128; canvas.height = 128;
+    const context = canvas.getContext('2d');
+    const grad = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    context.fillStyle = grad;
+    context.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(canvas);
 }
 
 function setupThreeJS() {
@@ -127,6 +151,16 @@ function setupThreeJS() {
     renderer.setSize(w, h);
     renderer.setPixelRatio(window.devicePixelRatio);
     threeContainer.appendChild(renderer.domElement);
+
+    const renderScene = new THREE.RenderPass(scene, camera);
+    const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(w, h), 1.5, 0.4, 0.85);
+    bloomPass.threshold = 0.2;
+    bloomPass.strength = 1.2;
+    bloomPass.radius = 0.5;
+    
+    composer = new THREE.EffectComposer(renderer);
+    composer.addPass(renderScene);
+    composer.addPass(bloomPass);
 
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -159,6 +193,19 @@ function setupThreeJS() {
     floorMesh.position.y = 0.02;
     floorMesh.visible = false;
     floorGroups[0].add(floorMesh);
+
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x00f2fe, linewidth: 2, transparent: true, opacity: 0.6 });
+    pathLine = new THREE.Line(new THREE.BufferGeometry(), lineMat);
+    floorGroups[0].add(pathLine);
+
+    const auraMat = new THREE.MeshBasicMaterial({ 
+        color: 0xff1744, transparent: true, opacity: 0.0, 
+        map: createAuraTexture(), depthWrite: false, blending: THREE.AdditiveBlending 
+    });
+    avatarAura = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), auraMat);
+    avatarAura.rotation.x = -Math.PI / 2;
+    avatarAura.position.y = 0.05;
+    floorGroups[0].add(avatarAura);
 
     [0, 1].forEach(f => {
         const grid = new THREE.GridHelper(30, 30, 0x00f2fe, 0x1e293b);
@@ -296,10 +343,12 @@ function buildMallEnvironment(mallData) {
             geo = new THREE.CylinderGeometry(obs.radius, obs.radius, 2.5, 20);
             edgesGeo = geo;
             shapeClass = 'circle';
-        } else if (obs.type === "rect") {
+        } else if (obs.type === "rect" || obs.type === "doorway" || obs.type === "narrow_hall") {
             geo = new THREE.BoxGeometry(obs.w, 2.5, obs.d);
             edgesGeo = geo;
-            shapeClass = 'rect';
+            shapeClass = obs.type;
+        } else {
+            return;
         }
 
         const body = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({
@@ -353,8 +402,12 @@ function connectWebSocket(chart) {
         if (v.position.floor !== currentFloor) {
             // Remove avatar from old, add to new
             floorGroups[currentFloor].remove(avatar);
+            if(pathLine) floorGroups[currentFloor].remove(pathLine);
+            if(avatarAura) floorGroups[currentFloor].remove(avatarAura);
             currentFloor = v.position.floor;
             floorGroups[currentFloor].add(avatar);
+            if(pathLine) floorGroups[currentFloor].add(pathLine);
+            if(avatarAura) floorGroups[currentFloor].add(avatarAura);
             
             // Switch rendering visibility
             floorGroups[0].visible = (currentFloor === 0);
@@ -408,6 +461,16 @@ function connectWebSocket(chart) {
         const fogFill = document.getElementById('freeze-prob-fill');
         if (fogFill) fogFill.style.width = `${Math.round((a.freeze_prob_3s||0)*100)}%`;
 
+        window.currentFreezeRisk = a.freeze_prob_3s || 0;
+        if (v.waypoints && v.waypoints.length > 0) {
+            const pts = [new THREE.Vector3(targetPos.x, 0.1, targetPos.z)];
+            v.waypoints.forEach(wp => pts.push(new THREE.Vector3(wp.x, 0.1, wp.z)));
+            pathLine.geometry.setFromPoints(pts);
+            pathLine.visible = true;
+        } else {
+            if(pathLine) pathLine.visible = false;
+        }
+
         // Heatmap paint
         if (v.freeze_heatmap && v.freeze_heatmap.length) paintHeatmap(v.freeze_heatmap);
 
@@ -422,9 +485,14 @@ function connectWebSocket(chart) {
         };
         const hr=Math.round(v.heart_rate), stress=Math.round((a.stress_level||0)*100);
         const fall=Math.round((a.fall_risk||0)*100), fatigue=Math.round((v.fatigue||0)*100);
+        const tremor=Math.round((v.tremor_intensity||0)*100), health=Math.round(a.health_index||0);
         setTile('tile-hr','val-hr','bar-hr', hr, (hr-40)/140*100, hr>130?'state-crit':hr>110?'state-warn':'state-ok');
         setTile('tile-stress','val-stress','bar-stress', `${stress}%`, stress, stress>70?'state-crit':stress>40?'state-warn':'state-ok');
         setTile('tile-fall','val-fall','bar-fall', `${fall}%`, fall, fall>60?'state-crit':fall>30?'state-warn':'state-ok');
+        setTile('tile-tremor','val-tremor','bar-tremor', `${tremor}%`, tremor, tremor>70?'state-crit':tremor>38?'state-warn':'state-ok');
+        setTile('tile-health','val-health','bar-health', health, health, health<55?'state-crit':health<78?'state-warn':'state-ok');
+        const healthStatus = document.getElementById('health-status');
+        if (healthStatus) healthStatus.textContent = health < 55 ? 'CRITICAL' : health < 78 ? 'WATCH' : 'STABLE';
         setTile('tile-fatigue','val-fatigue','bar-fatigue', `${fatigue}%`, fatigue, fatigue>70?'state-crit':fatigue>40?'state-warn':'state-ok');
 
         const badge = document.getElementById('ai-status-badge');
@@ -432,6 +500,13 @@ function connectWebSocket(chart) {
 
         const fBadge = document.getElementById('freeze-badge');
         if (fBadge) fBadge.className = 'alert-badge' + (isFreezing ? ' freeze' : '');
+        const festinBadge = document.getElementById('festin-badge');
+        if (festinBadge) festinBadge.className = 'alert-badge' + (isFestinating ? ' festin' : '');
+
+        const clock = document.getElementById('session-timestamp');
+        if (clock && msg.timestamp) {
+            clock.textContent = new Date(msg.timestamp).toLocaleTimeString([], { hour12: false });
+        }
 
         chart.data.labels.push('');
         chart.data.datasets[0].data.push(v.heart_rate);
@@ -484,6 +559,7 @@ function onWindowResize() {
     camera.aspect = threeContainer.clientWidth / threeContainer.clientHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(threeContainer.clientWidth, threeContainer.clientHeight);
+    if (composer) composer.setSize(threeContainer.clientWidth, threeContainer.clientHeight);
 }
 
 function handleFrontendCollision() {
@@ -501,11 +577,13 @@ function handleFrontendCollision() {
             dz = currentPos.z - obs.z;
             dist = Math.sqrt(dx*dx + dz*dz);
             influence = obs.radius + 3.0;
-        } else if (obs.type === "rect") {
-            dx = Math.max(Math.abs(currentPos.x - obs.x) - obs.w/2, 0);
-            dz = Math.max(Math.abs(currentPos.z - obs.z) - obs.d/2, 0);
+        } else if (obs.type === "rect" || obs.type === "doorway" || obs.type === "narrow_hall") {
+            dx = Math.max(Math.abs(currentPos.x - obs.x) - obs.w / 2, 0);
+            dz = Math.max(Math.abs(currentPos.z - obs.z) - obs.d / 2, 0);
             dist = Math.sqrt(dx*dx + dz*dz);
             influence = 3.0;
+        } else {
+            return;
         }
 
         if (dist === 0) return;
@@ -548,6 +626,14 @@ function animate() {
     handleFrontendCollision();
     impactShake *= 0.82;
     
+    if (avatarAura) {
+        avatarAura.position.set(currentPos.x, 0.05, currentPos.z);
+        const fr = window.currentFreezeRisk;
+        avatarAura.material.opacity = fr > 0.3 ? (fr * 0.8) : 0;
+        const scale = 1.0 + Math.sin(Date.now() * 0.005) * 0.1 * fr;
+        avatarAura.scale.set(scale, scale, scale);
+    }
+    
     if (avatar) {
         avatar.position.copy(currentPos);
         animateNPCs();
@@ -571,30 +657,40 @@ function animate() {
             const tgtY = Math.atan2(velX, velZ);
             let dy = tgtY - avatar.rotation.y;
             while (dy > Math.PI) dy -= 2*Math.PI; while (dy < -Math.PI) dy += 2*Math.PI;
-            avatar.rotation.y += Math.sign(dy) * Math.min(Math.abs(dy), 0.08);
+            avatar.rotation.y += dy * 0.1;
         }
 
+        let targetLegL = 0, targetLegR = 0, targetArmL = -0.1, targetArmR = -0.1, targetAvRotZ = 0, targetAvPosY = 0.1;
+
         if (isFreezing) {
-            legL.rotation.x = 0.08 + tremorX; legR.rotation.x = -0.08 + tremorZ;
-            armL.rotation.x = -0.3 + tremorX; armR.rotation.x = -0.3 + tremorZ;
-            avatar.rotation.z = tremorX * 0.4;
-            avatar.rotation.x = stoop + Math.abs(tremorZ) * 0.15;
-            avatar.position.y = 0.1;
+            targetLegL = 0.08 + tremorX; targetLegR = -0.08 + tremorZ;
+            targetArmL = -0.3 + tremorX; targetArmR = -0.3 + tremorZ;
+            targetAvRotZ = tremorX * 0.4;
+            targetAvPosY = 0.1;
+            avatar.rotation.x = THREE.MathUtils.lerp(avatar.rotation.x, stoop + Math.abs(tremorZ) * 0.15, 0.1);
         } else {
             const shufFreq = time * 18 * Math.max(normSpeed, 0.1);
-            const shufAmp = normSpeed * 0.12;
-            legL.rotation.x = Math.sin(shufFreq) * shufAmp + tremorX;
-            legR.rotation.x = Math.sin(shufFreq + Math.PI) * shufAmp + tremorZ;
-            armL.rotation.x = -0.1 + Math.sin(shufFreq) * 0.04;
-            armR.rotation.x = -0.1 + Math.sin(shufFreq + Math.PI) * 0.04;
-            avatar.rotation.z = swayFactor * 0.04;
-            avatar.rotation.x = stoop;
-            avatar.position.y = 0.1 + Math.abs(Math.sin(shufFreq) * 0.015 * normSpeed);
+            const shufAmp = normSpeed * 0.15;
+            targetLegL = Math.sin(shufFreq) * shufAmp + tremorX;
+            targetLegR = Math.sin(shufFreq + Math.PI) * shufAmp + tremorZ;
+            targetArmL = -0.1 + Math.sin(shufFreq) * (shufAmp * 0.5);
+            targetArmR = -0.1 + Math.sin(shufFreq + Math.PI) * (shufAmp * 0.5);
+            targetAvRotZ = swayFactor * 0.04;
+            targetAvPosY = 0.1 + Math.abs(Math.sin(shufFreq) * 0.015 * normSpeed);
+            avatar.rotation.x = THREE.MathUtils.lerp(avatar.rotation.x, stoop, 0.1);
         }
+
+        legL.rotation.x = THREE.MathUtils.lerp(legL.rotation.x, targetLegL, 0.15);
+        legR.rotation.x = THREE.MathUtils.lerp(legR.rotation.x, targetLegR, 0.15);
+        armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, targetArmL, 0.15);
+        armR.rotation.x = THREE.MathUtils.lerp(armR.rotation.x, targetArmR, 0.15);
+        avatar.rotation.z = THREE.MathUtils.lerp(avatar.rotation.z, targetAvRotZ, 0.15);
+        avatar.position.y = THREE.MathUtils.lerp(avatar.position.y, targetAvPosY, 0.15);
     }
 
     if (controls) controls.update();
-    renderer.render(scene, camera);
+    if (composer) composer.render();
+    else renderer.render(scene, camera);
 }
 
 window.setScenario = function(name) {

@@ -247,7 +247,7 @@ html, body { height:100%; background:var(--bg); color:var(--t1); font-family:'In
 @keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
 
 .scenario-group { display:flex; gap:3px; align-items:center; }
-.scenario-group > span { font-size:.57rem; color:var(--t3); text-transform:uppercase; letter-spacing:1.5px; margin-right:4px; }
+.scenario-group > label { font-size:.57rem; color:var(--t3); text-transform:uppercase; letter-spacing:1.5px; margin-right:4px; }
 
 .sc-btn {
     background:transparent; border:1px solid var(--border);
