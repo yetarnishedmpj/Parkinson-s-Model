@@ -91,12 +91,31 @@ function init() {
 
 function createAvatarEntity(colorHex, isMain = false) {
     const group = new THREE.Group();
-    const coreMat = new THREE.MeshPhongMaterial({ color: colorHex, emissive: colorHex, emissiveIntensity: 0.8, shininess: 100, transparent: true, opacity: 0.9 });
-    const limbMat = new THREE.MeshPhongMaterial({ color: 0x1e293b, emissive: 0x0f172a, emissiveIntensity: 0.2, shininess: 50, transparent: true, opacity: 0.7 });
-    const jointMat = new THREE.MeshPhongMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.4 });
+    // Use standard materials for better response to lights/bloom
+    const coreMat = new THREE.MeshStandardMaterial({ 
+        color: colorHex, emissive: colorHex, emissiveIntensity: 0.8, 
+        roughness: 0.2, metalness: 0.8, transparent: true, opacity: 0.9 
+    });
+    const limbMat = new THREE.MeshStandardMaterial({ 
+        color: 0x1e293b, emissive: 0x0f172a, emissiveIntensity: 0.2, 
+        roughness: 0.5, metalness: 0.5, transparent: true, opacity: 0.7 
+    });
+    // Legs get their own material so we can colorize them for FOG risk
+    const legMat = limbMat.clone();
     
-    const _torso = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.6, 16), coreMat);
+    const jointMat = new THREE.MeshStandardMaterial({ 
+        color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.4, 
+        roughness: 0.1, metalness: 0.9 
+    });
+    
+    // Thorax (Respiratory)
+    const _torso = new THREE.Group();
     _torso.position.y = 1.1;
+    const thoraxMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.18, 0.6, 16), coreMat);
+    _torso.add(thoraxMesh);
+    // Add glowing spine/core
+    const spine = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.65, 8), jointMat);
+    _torso.add(spine);
     group.add(_torso);
     
     const _head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 16), limbMat);
@@ -106,10 +125,10 @@ function createAvatarEntity(colorHex, isMain = false) {
     _head.add(visor);
     group.add(_head);
     
-    const createLimb = (x, y, z) => {
+    const createLimb = (x, y, z, mat) => {
         const limb = new THREE.Group();
         limb.position.set(x, y, z);
-        const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.4, 4, 8), limbMat);
+        const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.4, 4, 8), mat);
         mesh.position.y = -0.2;
         limb.add(mesh);
         const joint = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), jointMat);
@@ -117,13 +136,16 @@ function createAvatarEntity(colorHex, isMain = false) {
         return limb;
     };
 
-    const _armL = createLimb(-0.35, 1.3, 0); group.add(_armL);
-    const _armR = createLimb(0.35, 1.3, 0);  group.add(_armR);
-    const _legL = createLimb(-0.15, 0.7, 0); group.add(_legL);
-    const _legR = createLimb(0.15, 0.7, 0);  group.add(_legR);
+    const _armL = createLimb(-0.35, 1.3, 0, limbMat); group.add(_armL);
+    const _armR = createLimb(0.35, 1.3, 0, limbMat);  group.add(_armR);
+    const _legL = createLimb(-0.15, 0.7, 0, legMat);  group.add(_legL);
+    const _legR = createLimb(0.15, 0.7, 0, legMat);   group.add(_legR);
 
     if (isMain) {
         torso = _torso; head = _head; armL = _armL; armR = _armR; legL = _legL; legR = _legR;
+        // Expose leg material for FOG colorizing and thorax for breathing
+        window.mainLegMat = legMat;
+        window.mainThorax = thoraxMesh;
     }
     return group;
 }
@@ -669,23 +691,46 @@ function animate() {
             targetAvPosY = 0.1;
             avatar.rotation.x = THREE.MathUtils.lerp(avatar.rotation.x, stoop + Math.abs(tremorZ) * 0.15, 0.1);
         } else {
+            // Organic Steering: Map A* velocity to walking cycle
             const shufFreq = time * 18 * Math.max(normSpeed, 0.1);
-            const shufAmp = normSpeed * 0.15;
+            const shufAmp = normSpeed * 0.35; // Increased for more natural step
             targetLegL = Math.sin(shufFreq) * shufAmp + tremorX;
             targetLegR = Math.sin(shufFreq + Math.PI) * shufAmp + tremorZ;
-            targetArmL = -0.1 + Math.sin(shufFreq) * (shufAmp * 0.5);
-            targetArmR = -0.1 + Math.sin(shufFreq + Math.PI) * (shufAmp * 0.5);
-            targetAvRotZ = swayFactor * 0.04;
-            targetAvPosY = 0.1 + Math.abs(Math.sin(shufFreq) * 0.015 * normSpeed);
-            avatar.rotation.x = THREE.MathUtils.lerp(avatar.rotation.x, stoop, 0.1);
+            // Opposite arm swing
+            targetArmL = Math.sin(shufFreq + Math.PI) * (shufAmp * 0.8) + tremorX;
+            targetArmR = Math.sin(shufFreq) * (shufAmp * 0.8) + tremorZ;
+            // Hip sway & Head bob
+            targetAvRotZ = Math.sin(shufFreq * 0.5) * 0.08 * normSpeed + swayFactor * 0.04;
+            targetAvPosY = 0.1 + Math.abs(Math.sin(shufFreq)) * 0.03 * normSpeed;
+            avatar.rotation.x = THREE.MathUtils.lerp(avatar.rotation.x, stoop + Math.abs(Math.cos(shufFreq))*0.02, 0.1);
         }
 
-        legL.rotation.x = THREE.MathUtils.lerp(legL.rotation.x, targetLegL, 0.15);
-        legR.rotation.x = THREE.MathUtils.lerp(legR.rotation.x, targetLegR, 0.15);
-        armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, targetArmL, 0.15);
-        armR.rotation.x = THREE.MathUtils.lerp(armR.rotation.x, targetArmR, 0.15);
+        const applySlerp = (obj, eulerX, eulerY, eulerZ) => {
+            const tgt = new THREE.Quaternion().setFromEuler(new THREE.Euler(eulerX, eulerY, eulerZ));
+            obj.quaternion.slerp(tgt, 0.15);
+        };
+        applySlerp(legL, targetLegL, 0, 0);
+        applySlerp(legR, targetLegR, 0, 0);
+        applySlerp(armL, targetArmL, 0, targetAvRotZ*0.5); // Slight arm sway
+        applySlerp(armR, targetArmR, 0, targetAvRotZ*0.5);
+
         avatar.rotation.z = THREE.MathUtils.lerp(avatar.rotation.z, targetAvRotZ, 0.15);
         avatar.position.y = THREE.MathUtils.lerp(avatar.position.y, targetAvPosY, 0.15);
+
+        if (window.mainThorax) {
+            const breathScale = 1.0 + breathPhase * 0.12;
+            window.mainThorax.scale.set(breathScale, 1.0, breathScale);
+        }
+
+        // Colorize legs based on FOG risk
+        if (window.mainLegMat) {
+            const fr = window.currentFreezeRisk || 0;
+            // Transition from default to red based on FOG risk
+            const baseColor = new THREE.Color(0x1e293b);
+            const riskColor = new THREE.Color(0xff1744);
+            window.mainLegMat.color.lerpColors(baseColor, riskColor, fr);
+            window.mainLegMat.emissive.lerpColors(new THREE.Color(0x0f172a), new THREE.Color(0xaa0000), fr);
+        }
     }
 
     if (controls) controls.update();
