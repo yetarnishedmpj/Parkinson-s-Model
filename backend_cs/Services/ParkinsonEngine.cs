@@ -14,8 +14,8 @@ namespace DigitalTwin.Services
         private int _step = 0;
         public string Scenario { get; private set; } = "RESTING";
 
-        private Position _pos = new() { X = 0, Y = 0, Z = 0 };
-        private Position _targetPos = new() { X = 0, Y = 0, Z = 0 };
+        private Position _pos = new() { X = -4, Y = 0, Z = 4 };
+        private Position _targetPos = new() { X = -4, Y = 0, Z = 4 };
         
         // Manual control
         public Position ManualMoveVector { get; set; } = new() { X = 0, Y = 0, Z = 0 };
