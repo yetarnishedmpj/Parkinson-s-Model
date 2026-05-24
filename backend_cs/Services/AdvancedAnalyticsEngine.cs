@@ -11,6 +11,8 @@ namespace DigitalTwin.Services
         private readonly Queue<double> _tremorHistory = new();
         private const int WindowSize = 50;
 
+        private bool _wasHrvDepressed = false;
+
         public DetailedTelemetry ProcessTelemetry(double hr, double tremor, bool isFreezing, double proximity)
         {
             _hrHistory.Enqueue(hr);
@@ -52,8 +54,12 @@ namespace DigitalTwin.Services
             if (telemetry.FogRiskFlag)
                 telemetry.InterventionAuditTrail.Add("FOG_RISK_ELEVATED");
             
-            if (hrv < 2.0 && _hrHistory.Count == WindowSize)
+            bool isHrvDepressed = hrv < 2.0 && _hrHistory.Count == WindowSize;
+            if (isHrvDepressed && !_wasHrvDepressed)
+            {
                 telemetry.InterventionAuditTrail.Add("HRV_DEPRESSED_WARNING");
+            }
+            _wasHrvDepressed = isHrvDepressed;
 
             return telemetry;
         }
