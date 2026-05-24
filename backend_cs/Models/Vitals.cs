@@ -8,6 +8,7 @@ namespace DigitalTwin.Models
         public double X { get; set; }
         public double Y { get; set; }
         public double Z { get; set; }
+        public int Floor { get; set; } = 0;
     }
 
     public class VitalsReading

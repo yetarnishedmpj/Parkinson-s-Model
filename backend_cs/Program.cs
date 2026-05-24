@@ -73,7 +73,7 @@ app.Map("/ws", async context =>
             var telemetry = engine.GenerateTelemetry();
             var json = JsonSerializer.Serialize(telemetry, new JsonSerializerOptions 
             { 
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase 
+                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower 
             });
             var bytes = Encoding.UTF8.GetBytes(json);
             
