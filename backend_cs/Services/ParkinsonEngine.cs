@@ -24,12 +24,22 @@ namespace DigitalTwin.Services
         private bool _isFreezing = false;
         private int _stepsSinceLastFog = 100; // Track steps since last freeze
         
+        private readonly AdvancedAnalyticsEngine _analyticsEngine;
+        private readonly EventLoggerService _eventLogger;
+
         private readonly List<dynamic> _obstacles = new()
         {
             new { Name = "Stairs", X = 5.0, Z = 5.0, Size = 2.0 },
             new { Name = "Narrow Passage", X = -5.0, Z = 2.0, Size = 1.5 },
             new { Name = "Doorway", X = 0.0, Z = -6.0, Size = 1.0 }
         };
+
+        public ParkinsonEngine(AdvancedAnalyticsEngine analyticsEngine, EventLoggerService eventLogger)
+        {
+            _analyticsEngine = analyticsEngine;
+            _eventLogger = eventLogger;
+            _eventLogger.LogEvent("SYSTEM", "ParkinsonEngine initialized.");
+        }
 
         public void SetScenario(string scenario)
         {
@@ -40,6 +50,7 @@ namespace DigitalTwin.Services
                 "SLEEPING" => 0.05,
                 _ => 0.2
             };
+            _eventLogger.LogEvent("SCENARIO", $"Scenario changed to {Scenario}");
         }
 
         private double GetNoise(double magnitude) => (Random.Shared.NextDouble() - 0.5) * magnitude;
@@ -71,6 +82,17 @@ namespace DigitalTwin.Services
 
             double finalHr = _baseHr + Math.Sin(_step * 0.2) * 2.0 + GetNoise(3.0);
             
+            // Use advanced analytics engine
+            var detailedAnalytics = _analyticsEngine.ProcessTelemetry(finalHr, tremorIntensity, _isFreezing, proximityToHazard);
+
+            if (detailedAnalytics.InterventionAuditTrail.Any())
+            {
+                foreach (var intervention in detailedAnalytics.InterventionAuditTrail)
+                {
+                    _eventLogger.LogEvent("INTERVENTION", intervention, detailedAnalytics.NeurologicalStressScore);
+                }
+            }
+
             var packet = new TelemetryPacket
             {
                 Scenario = Scenario,
@@ -83,7 +105,13 @@ namespace DigitalTwin.Services
                     HazardProximity = Math.Round(proximityToHazard, 2),
                     TremorIntensity = Math.Round(tremorIntensity, 2)
                 },
-                Analytics = PerformDiagnostics(finalHr, _baseTemp, _isFreezing, proximityToHazard)
+                Analytics = new Analytics
+                {
+                    StressLevel = detailedAnalytics.NeurologicalStressScore,
+                    HealthIndex = Math.Round(100 * (1.0 - detailedAnalytics.NeurologicalStressScore), 1),
+                    IsFreezing = detailedAnalytics.FogRiskFlag,
+                    Status = detailedAnalytics.NeurologicalStressScore > 0.8 ? "CRITICAL" : detailedAnalytics.NeurologicalStressScore > 0.5 ? "STRESSED" : "EXCELLENT"
+                }
             };
 
             return packet;
@@ -119,6 +147,7 @@ namespace DigitalTwin.Services
                 {
                     _isFreezing = false;
                     _stepsSinceLastFog = 0; // Reset cooldown after finishing a freeze
+                    _eventLogger.LogEvent("MOTOR", "FOG Event Ended", 0.2);
                 }
                 return 1.0; // High anxiety during FOG
             }
@@ -167,25 +196,12 @@ namespace DigitalTwin.Services
                     if (dist < (double)obs.Size * 0.8 && _stepsSinceLastFog > 100 && Random.Shared.Next(0, 100) < 3)
                     {
                         _isFreezing = true;
+                        _eventLogger.LogEvent("MOTOR", "FOG Event Triggered", 0.9);
                     }
                 }
             }
 
             return proximity;
-        }
-
-        private Analytics PerformDiagnostics(double hr, double temp, bool isFreezing, double proximity)
-        {
-            double stress = (hr - 70) / 100.0 + (isFreezing ? 0.5 : 0) + proximity * 0.3;
-            stress = Math.Clamp(stress, 0, 1);
-
-            return new Analytics
-            {
-                StressLevel = Math.Round(stress, 2),
-                HealthIndex = Math.Round(100 * (1.0 - stress), 1),
-                IsFreezing = isFreezing,
-                Status = stress > 0.8 ? "CRITICAL" : stress > 0.5 ? "STRESSED" : "EXCELLENT"
-            };
         }
     }
 }

@@ -2,18 +2,19 @@
 
 /* ─── Design Tokens ─── */
 :root {
-    --cyan:   #00e5ff;
-    --green:  #00e676;
-    --amber:  #ffab00;
-    --red:    #ff1744;
-    --t1: #eef2ff;
-    --t2: #7a8fbb;
-    --t3: #3a4a6a;
-    --bg:       #060810;
-    --bg-panel: #0a0d18;
-    --border:   rgba(255,255,255,0.07);
-    --borderA:  rgba(0,229,255,0.22);
-    --cyan-glow: 0 0 18px rgba(0,229,255,0.4);
+    --cyan:   #00f5ff;
+    --green:  #00fa9a;
+    --amber:  #ffb300;
+    --red:    #ff3366;
+    --t1: #ffffff;
+    --t2: #94a3b8;
+    --t3: #475569;
+    --bg:       #04060b;
+    --bg-panel: rgba(10, 13, 24, 0.4);
+    --border:   rgba(255,255,255,0.08);
+    --borderA:  rgba(0, 245, 255, 0.25);
+    --cyan-glow: 0 0 20px rgba(0, 245, 255, 0.5);
+    --panel-blur: blur(24px);
 }
 
 *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
@@ -38,10 +39,11 @@ html, body { height:100%; background:var(--bg); color:var(--t1); font-family:'In
     z-index: 100;
     display: flex; align-items: center;
     padding: 0 1.2rem; gap: 1rem;
-    background: rgba(6,8,16,0.7);
+    background: rgba(4, 6, 11, 0.65);
     border-bottom: 1px solid var(--border);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: var(--panel-blur);
+    -webkit-backdrop-filter: var(--panel-blur);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
     overflow: hidden;
 }
 
@@ -127,11 +129,14 @@ html, body { height:100%; background:var(--bg); color:var(--t1); font-family:'In
 
 /* Right panel: stats dashboard */
 .stats-panel {
-    width: 316px;
+    width: 320px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     background: var(--bg-panel);
+    backdrop-filter: var(--panel-blur);
+    -webkit-backdrop-filter: var(--panel-blur);
+    box-shadow: -10px 0 30px rgba(0,0,0,0.5);
     overflow-y: auto;
 }
 .stats-panel::-webkit-scrollbar { width:3px; }
@@ -162,18 +167,18 @@ html, body { height:100%; background:var(--bg); color:var(--t1); font-family:'In
     flex-shrink: 0;
 }
 .vital-tile {
-    background: rgba(10, 13, 24, 0.65);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    padding: 10px 12px 8px;
+    background: rgba(255, 255, 255, 0.02);
+    padding: 12px 14px 10px;
     border-top: 2px solid transparent;
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
     border-right: 1px solid rgba(255, 255, 255, 0.03);
-    transition: background .2s, border-color .4s, transform .2s ease-out;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 .vital-tile:hover { 
-    transform: translateY(-2px);
-    background: rgba(18, 26, 50, 0.85); 
+    transform: translateY(-3px) scale(1.02);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+    z-index: 10;
 }
 .vital-label {
     font-size: 0.53rem; font-weight: 600;
@@ -197,15 +202,16 @@ html, body { height:100%; background:var(--bg); color:var(--t1); font-family:'In
     background: var(--cyan); transition: width .35s ease, background .4s;
 }
 /* States */
-.vital-tile.state-ok   { border-top-color: var(--green); }
-.vital-tile.state-warn { border-top-color: var(--amber); }
-.vital-tile.state-crit { border-top-color: var(--red); }
-.vital-tile.state-ok   .vital-value { color: var(--green); }
-.vital-tile.state-warn .vital-value { color: var(--amber); }
-.vital-tile.state-crit .vital-value { color: var(--red); }
-.vital-tile.state-ok   .vital-bar-fill { background: var(--green); }
-.vital-tile.state-warn .vital-bar-fill { background: var(--amber); }
-.vital-tile.state-crit .vital-bar-fill { background: var(--red); }
+.vital-tile.state-ok   { border-top-color: var(--green); box-shadow: inset 0 2px 15px rgba(0,250,154,0.05); }
+.vital-tile.state-warn { border-top-color: var(--amber); box-shadow: inset 0 2px 15px rgba(255,179,0,0.1); }
+.vital-tile.state-crit { border-top-color: var(--red); box-shadow: inset 0 2px 15px rgba(255,51,102,0.15); animation: pulseCrit 2s infinite; }
+@keyframes pulseCrit { 0% { background: rgba(255,51,102,0.05); } 50% { background: rgba(255,51,102,0.15); } 100% { background: rgba(255,51,102,0.05); } }
+.vital-tile.state-ok   .vital-value { color: var(--green); text-shadow: 0 0 10px rgba(0,250,154,0.4); }
+.vital-tile.state-warn .vital-value { color: var(--amber); text-shadow: 0 0 10px rgba(255,179,0,0.4); }
+.vital-tile.state-crit .vital-value { color: var(--red); text-shadow: 0 0 10px rgba(255,51,102,0.6); }
+.vital-tile.state-ok   .vital-bar-fill { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.vital-tile.state-warn .vital-bar-fill { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.vital-tile.state-crit .vital-bar-fill { background: var(--red); box-shadow: 0 0 8px var(--red); }
 
 /* ── AI Block ── */
 .ai-block { 

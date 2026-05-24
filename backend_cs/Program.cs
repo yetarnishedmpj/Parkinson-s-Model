@@ -12,6 +12,8 @@ using DigitalTwin.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services
+builder.Services.AddSingleton<EventLoggerService>();
+builder.Services.AddSingleton<AdvancedAnalyticsEngine>();
 builder.Services.AddSingleton<ParkinsonEngine>();
 builder.Services.AddCors(options =>
 {
