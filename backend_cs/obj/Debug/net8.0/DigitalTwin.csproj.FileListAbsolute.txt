@@ -29,3 +29,4 @@ C:\Users\mahar\Downloads\digital_twin_mvp\backend_cs\obj\Debug\net8.0\refint\Dig
 C:\Users\mahar\Downloads\digital_twin_mvp\backend_cs\obj\Debug\net8.0\DigitalTwin.pdb
 C:\Users\mahar\Downloads\digital_twin_mvp\backend_cs\obj\Debug\net8.0\DigitalTwin.genruntimeconfig.cache
 C:\Users\mahar\Downloads\digital_twin_mvp\backend_cs\obj\Debug\net8.0\ref\DigitalTwin.dll
+C:\Users\mahar\Downloads\digital_twin_mvp\backend_cs\obj\Debug\net8.0\DigitalTwin.sourcelink.json

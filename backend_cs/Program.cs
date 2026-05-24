@@ -35,17 +35,29 @@ app.UseFileServer(new FileServerOptions
 });
 
 // Scenario Endpoint
-app.MapPost("/api/scenario/{name}", (string name, ParkinsonEngine engine) =>
+app.MapPost("/api/v1/scenario/{name}", (string name, ParkinsonEngine engine) =>
 {
     engine.SetScenario(name);
     return Results.Ok(new { status = "success", scenario = engine.Scenario });
 });
 
 // Manual Control Endpoint
-app.MapPost("/api/control/move", (Position move, ParkinsonEngine engine) =>
+app.MapPost("/api/v1/control/move", (Position move, ParkinsonEngine engine) =>
 {
     engine.SetManualMove(move.X, move.Z);
     return Results.Ok(new { status = "success" });
+});
+
+// Mall Endpoint
+app.MapGet("/api/v1/mall", (ParkinsonEngine engine) =>
+{
+    return Results.Ok(new { obstacles = engine.Obstacles, escalators = engine.Escalators });
+});
+
+// Sessions Endpoint
+app.MapGet("/api/v1/sessions", () =>
+{
+    return Results.Ok(new object[] { });
 });
 
 // WebSocket Telemetry Endpoint

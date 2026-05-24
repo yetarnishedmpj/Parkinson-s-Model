@@ -27,11 +27,20 @@ namespace DigitalTwin.Services
         private readonly AdvancedAnalyticsEngine _analyticsEngine;
         private readonly EventLoggerService _eventLogger;
 
-        private readonly List<dynamic> _obstacles = new()
+        public object[] Obstacles { get; } = new object[]
         {
-            new { Name = "Stairs", X = 5.0, Z = 5.0, Size = 2.0 },
-            new { Name = "Narrow Passage", X = -5.0, Z = 2.0, Size = 1.5 },
-            new { Name = "Doorway", X = 0.0, Z = -6.0, Size = 1.0 }
+            new { floor = 0, type = "doorway", x = 0.0, z = -8.0, w = 6.0, d = 6.0, radius = 1.8, name = "Coffee Shop" },
+            new { floor = 0, type = "rect", x = 8.0, z = -8.0, w = 6.0, d = 4.0, radius = 2.0, name = "Electronics" },
+            new { floor = 0, type = "rect", x = -8.0, z = 8.0, w = 4.0, d = 6.0, radius = 1.8, name = "Clothing" },
+            new { floor = 0, type = "circle", x = 0.0, z = 0.0, radius = 2.0, name = "Fountain" },
+            new { floor = 1, type = "narrow_hall", x = 0.0, z = -10.0, w = 12.0, d = 4.0, radius = 1.8, name = "Food Court" },
+            new { floor = 1, type = "doorway", x = -10.0, z = 0.0, w = 3.0, d = 8.0, radius = 1.5, name = "Restrooms" },
+            new { floor = 1, type = "circle", x = 8.0, z = 8.0, radius = 1.5, name = "Lounge Pillar" }
+        };
+
+        public object[] Escalators { get; } = new object[]
+        {
+            new { x = 12.0, z = 0.0, radius = 2.0 }
         };
 
         public ParkinsonEngine(AdvancedAnalyticsEngine analyticsEngine, EventLoggerService eventLogger)
@@ -184,16 +193,20 @@ namespace DigitalTwin.Services
 
             // Collision & FOG logic
             double proximity = 0.0;
-            foreach (var obs in _obstacles)
+            foreach (dynamic obs in Obstacles)
             {
-                double dist = Math.Sqrt(Math.Pow(_pos.X - (double)obs.X, 2) + Math.Pow(_pos.Z - (double)obs.Z, 2));
-                if (dist < (double)obs.Size)
+                double obsX = (double)obs.x;
+                double obsZ = (double)obs.z;
+                double obsRadius = (double)obs.radius;
+
+                double dist = Math.Sqrt(Math.Pow(_pos.X - obsX, 2) + Math.Pow(_pos.Z - obsZ, 2));
+                if (dist < obsRadius)
                 {
-                    proximity = Math.Max(proximity, ((double)obs.Size - dist) / (double)obs.Size);
+                    proximity = Math.Max(proximity, (obsRadius - dist) / obsRadius);
                     
                     // Possible Freezing of Gait when near obstacles (3% chance per step)
                     // Added Cooldown: Only freeze if it's been at least 100 steps since the last FOG
-                    if (dist < (double)obs.Size * 0.8 && _stepsSinceLastFog > 100 && Random.Shared.Next(0, 100) < 3)
+                    if (dist < obsRadius * 0.8 && _stepsSinceLastFog > 100 && Random.Shared.Next(0, 100) < 3)
                     {
                         _isFreezing = true;
                         _eventLogger.LogEvent("MOTOR", "FOG Event Triggered", 0.9);
