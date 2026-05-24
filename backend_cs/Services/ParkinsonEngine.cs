@@ -204,6 +204,14 @@ namespace DigitalTwin.Services
                 {
                     proximity = Math.Max(proximity, (obsRadius - dist) / obsRadius);
                     
+                    // Simple physics push-out (collision response)
+                    double overlap = obsRadius - dist;
+                    if (dist > 0.001) // avoid division by zero
+                    {
+                        _pos.X += ((_pos.X - obsX) / dist) * overlap;
+                        _pos.Z += ((_pos.Z - obsZ) / dist) * overlap;
+                    }
+
                     // Possible Freezing of Gait when near obstacles (3% chance per step)
                     // Added Cooldown: Only freeze if it's been at least 100 steps since the last FOG
                     if (dist < obsRadius * 0.8 && _stepsSinceLastFog > 100 && Random.Shared.Next(0, 100) < 3)
